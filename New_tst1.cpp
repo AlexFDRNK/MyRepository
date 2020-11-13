@@ -65,10 +65,12 @@ public:
 
     void AddDocument(int document_id, const string& document, DocumentStatus status, const vector<int>& ratings) {
         const vector<string> words = SplitIntoWordsNoStop(document);
+        //Что будет если на вход функции придет пустая строка?
         const double inv_word_count = 1.0 / words.size();
         for (const string& word : words) {
             word_to_document_freqs_[word][document_id] += inv_word_count;
         }
+        //1. Список аргументов лучше записать в одну строку, он не слишком длинный
         documents_.emplace(document_id,
             DocumentData{
                 ComputeAverageRating(ratings),
@@ -76,6 +78,8 @@ public:
             });
     }
 
+    //Метвый код нужно удалять. 
+    //https://habr.com/ru/post/145592/
 //    vector<Document> FindTopDocuments(const string& raw_query) const {
 //        auto fun_pred = [](int document_id, DocumentStatus status, int rating) { return status == DocumentStatus::ACTUAL; };
 //        return FindTopDocuments(raw_query, fun_pred);
@@ -86,6 +90,10 @@ public:
         return FindTopDocuments(raw_query, fun_pred);
     }
 
+ //Что будет если пользователь вашего интерфейса передаст в вашу функцию int вместо Template
+//Вы никак не ограничивайте шаблон. Лучше использовать std::function
+//https://en.cppreference.com/w/cpp/utility/functional/function
+//Статья о том выборе шаблона или std::function https://stackoverflow.com/questions/14677997/stdfunction-vs-template
     template <typename Template>
     vector<Document> FindTopDocuments(const string& raw_query, Template fun_pred) const {
         const Query query = ParseQuery(raw_query);
@@ -93,6 +101,8 @@ public:
 
         sort(matched_documents.begin(), matched_documents.end(),
              [](const Document& lhs, const Document& rhs) {
+            //Используйте тернарный оператор. Код будет выразительнее
+            //https://ru.wikipedia.org/wiki/%D0%A2%D0%B5%D1%80%D0%BD%D0%B0%D1%80%D0%BD%D0%B0%D1%8F_%D1%83%D1%81%D0%BB%D0%BE%D0%B2%D0%BD%D0%B0%D1%8F_%D0%BE%D0%BF%D0%B5%D1%80%D0%B0%D1%86%D0%B8%D1%8F
                 if (abs(lhs.relevance - rhs.relevance) < 1e-6) {
                     return lhs.rating > rhs.rating;
                 } else {
@@ -105,6 +115,8 @@ public:
         return matched_documents;
     }
 
+    //Используйте для возврата размерности size_t, так как size() возвращает тип size_t
+    //https://progi.pro/raznica-mezhdu-ispolzovaniem-tipa-size_t-i-int-pri-ispolzovanii-v-kachestve-tipa-shablona-879719
     int GetDocumentCount() const {
         return documents_.size();
     }
@@ -124,6 +136,9 @@ public:
             if (word_to_document_freqs_.count(word) == 0) {
                 continue;
             }
+            //Инвертируйте условие. Код будет лучше.
+            // Инвертировав условие вы его сможете соеденить с первым в одно условие.
+            // https://ravesli.com/urok-38-prioritet-operatsij-assotsiativnost/
             if (word_to_document_freqs_.at(word).count(document_id)) {
                 matched_words.clear();
                 break;
@@ -146,6 +161,10 @@ private:
         return stop_words_.count(word) > 0;
     }
 
+ //1. Избегайте использования предлогов именовании функций
+//К примеру функцию с именем TransformToObject слудует назвать TransformObject
+//2. No stop граматически неправильно. Используйте google переводчик для проверки корректности именования
+// Without Stop будет правильнее
     vector<string> SplitIntoWordsNoStop(const string& text) const {
         vector<string> words;
         for (const string& word : SplitIntoWords(text)) {
@@ -156,14 +175,18 @@ private:
         return words;
     }
 
+    //Размещайте статические методы либо до нестатических либо после и всегда придерживайтесь данного стиля
     static int ComputeAverageRating(const vector<int>& ratings) {
         int rating_sum = 0;
+        //Используйте константные ссылки для перебора коллекции вместо копирования
         for (const int rating : ratings) {
             rating_sum += rating;
         }
+        //Что будет если ratings будет пустым?
         return rating_sum / static_cast<int>(ratings.size());
     }
 
+    //Размещайте объекты данных в одном месте а функции в друнгом
     struct QueryWord {
         string data;
         bool is_minus;
@@ -184,6 +207,7 @@ private:
         };
     }
 
+    //Размещайте объекты данных в одном месте а функции в друнгом
     struct Query {
         set<string> plus_words;
         set<string> minus_words;
@@ -209,6 +233,10 @@ private:
         return log(GetDocumentCount() * 1.0 / word_to_document_freqs_.at(word).size());
     }
 
+//Что будет если пользователь вашего интерфейса передаст в вашу функцию int вместо Template
+//Вы никак не ограничивайте шаблон. Лучше использовать std::function
+//https://en.cppreference.com/w/cpp/utility/functional/function
+//Статья о том выборе шаблона или std::function https://stackoverflow.com/questions/14677997/stdfunction-vs-template
     template <typename Template>
     vector<Document> FindAllDocuments(const Query& query, Template fun_pred) const {
         map<int, double> document_to_relevance;
@@ -218,6 +246,8 @@ private:
             }
             const double inverse_document_freq = ComputeWordInverseDocumentFreq(word);
 //===========================================================================================================================
+  //Используйте константные ссылки в цикле и ознакомьтесь с синтаксисом для перебора элементов map
+//https://stackoverflow.com/questions/6963894/how-to-use-range-based-for-loop-with-stdmap
             for (const auto [document_id, term_freq] : word_to_document_freqs_.at(word)) {
 //                if (documents_.at(document_id).status == status) {
                 if (fun_pred(document_id, documents_.at(document_id).status, documents_.at(document_id).rating)) {
@@ -230,12 +260,16 @@ private:
             if (word_to_document_freqs_.count(word) == 0) {
                 continue;
             }
+//Используйте константные ссылки в цикле и ознакомьтесь с синтаксисом для перебора элементов map
+//https://stackoverflow.com/questions/6963894/how-to-use-range-based-for-loop-with-stdmap
             for (const auto [document_id, _] : word_to_document_freqs_.at(word)) {
                 document_to_relevance.erase(document_id);
             }
         }
 
         vector<Document> matched_documents;
+//Используйте константные ссылки в цикле и ознакомьтесь с синтаксисом для перебора элементов map
+//https://stackoverflow.com/questions/6963894/how-to-use-range-based-for-loop-with-stdmap
         for (const auto [document_id, relevance] : document_to_relevance) {
             matched_documents.push_back({
                 document_id,
@@ -247,7 +281,7 @@ private:
     }
 };
 
-// ==================== ��� ������� =========================
+// ==================== для примера =========================
 
 void PrintDocument(const Document& document) {
     cout << "{ "s
@@ -259,25 +293,26 @@ void PrintDocument(const Document& document) {
 
 int main() {
     SearchServer search_server;
-    search_server.SetStopWords("� � ��"s);
+    search_server.SetStopWords("и в на"s);
 
-    search_server.AddDocument(0, "����� ��� � ������ �������"s,        DocumentStatus::ACTUAL, {8, -3});
-    search_server.AddDocument(1, "�������� ��� �������� �����"s,       DocumentStatus::ACTUAL, {7, 2, 7});
-    search_server.AddDocument(2, "��������� �� ������������� �����"s, DocumentStatus::ACTUAL, {5, -12, 2, 1});
-    search_server.AddDocument(3, "��������� ������� �������"s,         DocumentStatus::BANNED, {9});
+    search_server.AddDocument(0, "белый кот и модный ошейник"s,        DocumentStatus::ACTUAL, {8, -3});
+    search_server.AddDocument(1, "пушистый кот пушистый хвост"s,       DocumentStatus::ACTUAL, {7, 2, 7});
+    search_server.AddDocument(2, "ухоженный пёс выразительные глаза"s, DocumentStatus::ACTUAL, {5, -12, 2, 1});
+    search_server.AddDocument(3, "ухоженный скворец евгений"s,         DocumentStatus::BANNED, {9});
 
     cout << "ACTUAL by default:"s << endl;
-    for (const Document& document : search_server.FindTopDocuments("�������� ��������� ���"s)) {
+    for (const Document& document : search_server.FindTopDocuments("пушистый ухоженный кот"s)) {
         PrintDocument(document);
     }
 
     cout << "BANNED:"s << endl;
-    for (const Document& document : search_server.FindTopDocuments("�������� ��������� ���"s, DocumentStatus::BANNED)) {
+    for (const Document& document : search_server.FindTopDocuments("пушистый ухоженный кот"s, DocumentStatus::BANNED)) {
         PrintDocument(document);
     }
 
     cout << "Even ids:"s << endl;
-    for (const Document& document : search_server.FindTopDocuments("�������� ��������� ���"s, [](int document_id, DocumentStatus status, int rating) { return document_id % 2 == 0; })) {
+    //Лямбда слишком длинная, необходимо вынести ее в переменную. Код плохо читается.
+    for (const Document& document : search_server.FindTopDocuments("пушистый ухоженный кот"s, [](int document_id, DocumentStatus status, int rating) { return document_id % 2 == 0; })) {
         PrintDocument(document);
     }
 
